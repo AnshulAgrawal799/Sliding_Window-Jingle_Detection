@@ -14,7 +14,9 @@ This version incorporates the **actual jingle audio file** you supplied and adds
 
 ## 1. Scope
 
-## This plan covers everything from use of the reference jingle audio for: dataset expansion, prefiltering, and verification.
+This plan covers explicit use of the reference jingle audio for: dataset expansion, prefiltering, and verification. Out of scope: interactive dashboard UI (can be added later).
+
+---
 
 ## 2. Deliverables
 
@@ -270,3 +272,138 @@ I will use these plus your canonical `data/reference/jingle.wav` to run the firs
 ---
 
 _End of plan._
+
+---
+
+## 3a. Audio Format Conversion
+
+Before preprocessing, convert all `.mp3` files to `.wav` format for consistency. Add a script (e.g., `scripts/convert_mp3_to_wav.py`) that:
+
+- Recursively scans the `data/` directory for `.mp3` files
+- Converts each `.mp3` to `.wav` (mono, target sample rate, e.g., 22050 Hz)
+- Places the converted `.wav` files alongside the originals or in a parallel structure
+
+Example usage:
+
+```bash
+python scripts/convert_mp3_to_wav.py --input_dir data/ --output_dir data_wav/ --sample_rate 22050
+```
+
+This ensures all downstream processing uses `.wav` files with consistent audio properties.
+
+---
+
+# Sliding-Window Jingle Detection — Minimal Feasibility Plan
+
+**Objective**
+
+Build a simple, reliable baseline system to detect repeated jingle plays in long vehicle recordings, outputting a JSON with timestamps and confidence scores for each detected jingle. The initial focus is on feasibility and minimal complexity, using your provided labeled data.
+
+---
+
+## 1. Scope
+
+This plan covers a minimal, end-to-end pipeline using your existing labeled data:
+
+- Reference jingle audio in `data/reference/jingle.wav`
+- Positive examples in `data/train/jingle/`
+- Negative examples in `data/train/no_jingle/`
+
+No synthetic data or advanced augmentation for now. The goal is to verify that detection is feasible with your real data.
+
+---
+
+## 2. Deliverables
+
+1. `plan.md` (this document)
+2. Simple training script for a lightweight classifier (e.g., CNN on log-mel spectrograms)
+3. Inference script that:
+
+   - Accepts one or more audio files
+   - Outputs a JSON file with detected jingle timestamps and confidence scores per file
+
+4. Minimal README with usage instructions
+
+---
+
+## 3. Data & Folder Layout
+
+```
+project-root/
+  data/
+     reference/
+        jingle.wav           # canonical reference audio of the jingle
+     train/
+        jingle/              # positive examples (chunks with jingle)
+        no_jingle/           # negative examples (chunks without jingle)
+  scripts/
+     train.py
+     infer.py
+  README.md
+  requirements.txt
+```
+
+---
+
+## 4. Preprocessing Pipeline
+
+1. Convert all audio to mono, fixed sample rate (e.g., 22050 Hz)
+2. Normalize amplitude
+3. Extract log-mel spectrograms (e.g., n_mels=64, n_fft=2048, hop_length=512)
+4. No augmentation or synthetic mixing at this stage
+
+---
+
+## 5. Model & Detection Design
+
+- **Model**: Small CNN classifier trained to distinguish jingle vs. no-jingle windows
+- **Sliding-window inference**:
+
+  - Slide a fixed-length window (matching jingle duration) over the input audio with a reasonable stride (e.g., 0.5s)
+  - For each window, compute log-mel spectrogram and run the classifier
+  - Record windows where confidence exceeds a threshold
+
+---
+
+## 6. Inference & Output
+
+- Input: One or more audio files
+- Output: JSON file per input, e.g.:
+
+  ```json
+  {
+    "audio_file_1.wav": [
+      { "timestamp": 12.5, "confidence": 0.92 },
+      { "timestamp": 45.8, "confidence": 0.87 }
+    ],
+    "audio_file_2.wav": [{ "timestamp": 8.1, "confidence": 0.95 }]
+  }
+  ```
+
+- Each detection: center time of window, classifier confidence
+
+---
+
+## 7. Evaluation
+
+- Manually review a few outputs to check if detections are correct
+- If feasible, split some labeled data for validation
+
+---
+
+## 8. Next Steps
+
+1. Implement minimal training and inference scripts as above
+2. Run on your real recordings and inspect JSON outputs
+3. If results are promising, iterate and expand (e.g., add synthetic data, prefiltering, more robust models)
+
+---
+
+## 9. Acceptance Criteria
+
+- Given input files, system outputs JSON with timestamps and confidence for detected jingles
+- Manual inspection shows most detections are correct (feasibility check)
+
+---
+
+_End of minimal plan._
