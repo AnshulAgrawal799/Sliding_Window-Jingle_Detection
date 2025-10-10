@@ -1,4 +1,20 @@
 
 data/
 
-Data
+venv
+
+__pycache__ 
+
+*.pyc
+
+*.pyo
+
+*.pyd
+
+*.pyc
+
+*.pyo
+
+*.pyd
+
+*.pyc
