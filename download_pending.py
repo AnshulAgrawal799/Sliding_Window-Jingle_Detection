@@ -12,7 +12,7 @@ def fetch_pending(limit=5):
     try:
         cur = conn.cursor(dictionary=True)
         cur.execute(
-            "SELECT id, s3_uri FROM audio_file WHERE process_status = %s ORDER BY id DESC LIMIT %s",
+            "SELECT id, s3_uri FROM audio_file WHERE process_status = %s LIMIT %s",
             ("Pending", limit),
         )
         return cur.fetchall()

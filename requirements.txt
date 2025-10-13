@@ -4,3 +4,6 @@ scikit-learn
 soundfile
 joblib
 tqdm
+mysql-connector-python>=8.0.23
+db_mysql
+
