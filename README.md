@@ -1,21 +1,50 @@
 # Sliding Window Jingle Detection
 
-This project provides a simple MFCC + RandomForest pipeline to train a model that detects whether a short audio clip contains a jingle. The main entrypoint is `scripts/jingle_detector.py`, which supports training and prediction via command-line.
+This project provides a simple MFCC + RandomForest pipeline to train a model that detects whether a short audio clip contains a jingle. The main entrypoint is `scripts/jingle_detector.py`, which supports training and prediction via command-line with **MySQL database integration** for storing predictions.
 
 ## Project Structure
 
-- `scripts/jingle_detector.py` — Train and predict CLI
+- `scripts/jingle_detector.py` — Train and predict CLI with database integration
 - `scripts/generate_dummy_audio.py` — Quickly generate tiny WAV files to test the pipeline
+- `db_mysql.py` — Database connection utilities for MySQL integration
 - `data/` — Place data here
   - `data/train_data/jingle/` — WAVs that contain a jingle
   - `data/train_data/non_jingle/` — WAVs that do not contain a jingle
   - `data/test_data/` — WAVs to run predictions on
 - `requirements.txt` — Python dependencies
+- `.env` — Environment variables for database configuration (create this file)
 
 ## Prerequisites
 
 - Python 3.9+ recommended
 - Windows PowerShell or Command Prompt
+- MySQL server running and accessible
+- Audio files must be registered in the `audio_file` table before running predictions
+
+## Database Setup
+
+1. **Create the database table** (run this SQL in your MySQL database):
+
+```sql
+CREATE TABLE jingle_detection (
+  id BIGINT UNSIGNED NOT NULL PRIMARY KEY AUTO_INCREMENT,
+  audio_file_id BIGINT NOT NULL,
+  jingle ENUM('Absent','Present') NOT NULL DEFAULT 'Absent',
+  row_created_at BIGINT NOT NULL DEFAULT (UNIX_TIMESTAMP())
+);
+```
+
+2. **Create a `.env` file** in the project root with your database credentials:
+
+```env
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=your_username
+DB_PASS=your_password
+DB_NAME=your_database_name
+```
+
+3. **Ensure audio files are in the database** - Before running predictions, make sure your audio files are registered in the `audio_file` table with their file paths in the `s3_uri` column.
 
 ## Setup
 
@@ -67,7 +96,7 @@ python scripts\jingle_detector.py train \
 
 ## Run Predictions
 
-You can run predictions on a single WAV file or an entire folder containing WAVs.
+You can run predictions on a single WAV file or an entire folder containing WAVs. **Predictions are automatically saved to the MySQL database.**
 
 - Predict for a folder (example uses the dummy test file folder):
 
@@ -81,14 +110,38 @@ You can run predictions on a single WAV file or an entire folder containing WAVs
   python scripts\jingle_detector.py predict --input data\test_data\test_tone.wav --model_path jingle_detector_model.pkl
   ```
 
+- Predict without saving to database:
+
+  ```powershell
+  python scripts\jingle_detector.py predict --input data\test_data --model_path jingle_detector_model.pkl --no_db
+  ```
+
 Output lines will look like:
 
 ```
 Prediction for data\test_data\test_tone.wav: Jingle Present
 ```
 
+## Database Integration
+
+When running predictions, the script will:
+
+1. **Look up audio file ID** - Find the corresponding `audio_file_id` in the `audio_file` table using the filename
+2. **Store prediction results** - Insert a row into the `jingle_detection` table with:
+   - `audio_file_id`: The ID from the `audio_file` table
+   - `jingle`: 'Present' or 'Absent' based on the prediction
+   - `row_created_at`: Automatic timestamp
+
+### Database Error Handling
+
+- If database connection fails, the script logs a warning but continues processing
+- If an audio file ID cannot be found, the prediction is logged but not saved to database
+- All database operations are handled gracefully without stopping the prediction process
+
 ## Notes
 
 - Input format: this example pipeline expects WAV files. If you have other formats (e.g., MP3), convert them to WAV or modify the loader accordingly.
 - If you have your own data, place it in the `data/train_data/jingle/` and `data/train_data/non_jingle/` directories and retrain the model.
 - If the script needs a configuration/model file: the only required artifact is the trained model file produced during training (`jingle_detector_model.pkl` by default). Place it wherever you like and reference it via `--model_path` during prediction.
+- Database credentials are read from environment variables defined in `.env` file
+- Make sure your `.env` file is properly configured before running predictions that save to database

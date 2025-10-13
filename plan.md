@@ -23,9 +23,10 @@ This plan covers explicit use of the reference jingle audio for: dataset expansi
 1. `plan.md` (this document)
 2. Training scripts and model artifact (TensorFlow/PyTorch) that detect jingle in short windows
 3. Inference script that scans long recordings, outputs `detections.csv`, and exports short audio clips per detection
-4. Evaluation report (precision/recall/confusion matrix) on a labeled holdout set
-5. README with folder structure, dependency list, and usage examples
-6. **Reference jingle** stored at `data/reference/jingle.wav` and utilities to use it:
+4. **Database integration for prediction storage** - Scripts automatically save jingle detection results to MySQL database
+5. Evaluation report (precision/recall/confusion matrix) on a labeled holdout set
+6. README with folder structure, dependency list, and usage examples
+7. **Reference jingle** stored at `data/reference/jingle.wav` and utilities to use it:
 
    - `scripts/make_synthetic.py` — generates synthetic long recordings by mixing jingle into backgrounds at controlled SNRs and timestamps
    - `scripts/prefilter.py` — computes fast cross-correlation / fingerprint prefilter to produce candidate windows
@@ -56,6 +57,9 @@ project-root/
     export_clips.py
     make_synthetic.py
     prefilter.py
+    jingle_detector.py     # Simple MFCC + RandomForest baseline with database integration
+  db_mysql.py             # Database connection utilities
+  .env                    # Database configuration (not in version control)
   README.md
   requirements.txt
 ```
@@ -162,6 +166,7 @@ Curriculum suggestion: start training with high-SNR synthetic positives (easy), 
 
 6. **Output**: `detections.csv` with columns: `recording_file, detection_idx, start_s, end_s, mid_s, confidence, absolute_time, method` (method = "prefilter+classifier" or "classifier-only" or "fingerprint").
 7. **Export clips**: for each detection, export a short audio clip (e.g., ±1s around midpoint) to `outputs/clips/` and include the canonical jingle spectrogram/metadata for quick human review.
+8. **Database storage**: automatically save each prediction to MySQL `jingle_detection` table with audio_file_id lookup for persistent storage and analysis.
 
 Performance optimization: prefiltering usually reduces total inference time by an order of magnitude while keeping recall high.
 
@@ -194,9 +199,50 @@ Note: do not rely on detection of arbitrary jingle plays for absolute synchroniz
 
 ## 10. Practical considerations & robustness (updated)
 
-- **Use the canonical jingle to create cover variations** (pitch/time-stretch) to make the system robust to playback speed/pitch differences.
-- **Phone codecs**: include compressed versions of the jingle (MP3/AMR) in synthetic training to simulate real-world degradation.
-- **Fallbacks**: when classifier confidence is borderline, consult fingerprint matching or require human verification for those cases.
+## Database Integration
+
+For persistent storage of jingle detection predictions, the system includes MySQL integration:
+
+### Database Setup Requirements
+
+1. **Create the jingle_detection table**:
+
+```sql
+CREATE TABLE jingle_detection (
+  id BIGINT UNSIGNED NOT NULL PRIMARY KEY AUTO_INCREMENT,
+  audio_file_id BIGINT NOT NULL,
+  jingle ENUM('Absent','Present') NOT NULL DEFAULT 'Absent',
+  row_created_at BIGINT NOT NULL DEFAULT (UNIX_TIMESTAMP())
+);
+```
+
+2. **Environment configuration** (`.env` file):
+
+```env
+DB_HOST=localhost
+DB_PORT=3306
+DB_USER=your_username
+DB_PASS=your_password
+DB_NAME=your_database_name
+```
+
+3. **Audio file registration**: Ensure audio files are registered in the `audio_file` table with file paths in the `s3_uri` column before running predictions.
+
+### Database Integration Features
+
+- **Automatic storage**: Predictions are automatically saved to the database after processing each file
+- **Error handling**: Database failures are logged but don't stop processing
+- **Audio file lookup**: Uses filename matching to find corresponding `audio_file_id`
+- **Graceful degradation**: Can run predictions without database storage using `--no_db` flag
+
+### Database Workflow
+
+1. Process audio file and generate prediction
+2. Look up `audio_file_id` in `audio_file` table using filename
+3. Insert prediction result into `jingle_detection` table
+4. Continue processing next file
+
+This provides persistent storage for analysis and reporting while maintaining the core detection functionality.
 
 ---
 
@@ -222,8 +268,9 @@ Note: do not rely on detection of arbitrary jingle plays for absolute synchroniz
 3. Implement `scripts/prefilter.py` (FFT cross-correlation and fingerprint options) and run it over a few long recordings to inspect candidate peaks.
 4. Implement training script (`scripts/train.py`) and run a baseline model trained on the synthetic + real labeled chunks.
 5. Implement inference script (`scripts/infer_sliding.py`) that supports a `--prefilter` option and exports `detections.csv` and clips.
-6. Tune threshold and NMS parameters using holdout set and SNR sweep; generate evaluation report.
-7. Iterate on augmentation and retrain if needed; re-evaluate.
+6. **Set up database integration**: Create `.env` file with database credentials and ensure `jingle_detection` table exists.
+7. Tune threshold and NMS parameters using holdout set and SNR sweep; generate evaluation report.
+8. Iterate on augmentation and retrain if needed; re-evaluate.
 
 ---
 
@@ -232,6 +279,9 @@ Note: do not rely on detection of arbitrary jingle plays for absolute synchroniz
 ```bash
 # Install minimal dependencies
 pip install numpy librosa tensorflow soundfile pandas pydub scipy
+
+# Set up database (one-time)
+# Create .env file with DB_* variables and run the CREATE TABLE SQL
 
 # Make canonical jingle
 python scripts/make_synthetic.py --mode canonical --input data/reference/jingle.wav --out data/reference/jingle_canonical.wav
@@ -245,8 +295,11 @@ python scripts/prefilter.py --method xcorr --jingle data/reference/jingle_canoni
 # Train (example)
 python scripts/train.py --data-dir data --out models/jingle_detector.h5
 
-# Run sliding-window inference with prefilter
+# Run sliding-window inference with prefilter (saves to database automatically)
 python scripts/infer_sliding.py --model models/jingle_detector.h5 --input recordings/route1.wav --out outputs/detections/route1.csv --clips outputs/clips/ --prefilter xcorr --prefilter-threshold 0.3
+
+# Or use the simple MFCC baseline with database integration
+python scripts/jingle_detector.py predict --input recordings/route1.wav --model_path jingle_detector_model.pkl
 ```
 
 ---
@@ -257,6 +310,7 @@ python scripts/infer_sliding.py --model models/jingle_detector.h5 --input record
 - Short audio clips for >95% of true positive detections are audibly correct on manual inspection of a sample set.
 - Performance benchmarks on synthetic SNR sweep: recall >= target at SNR >= 0 dB (tune to your operational target). Record the SNR level corresponding to the target recall.
 - Two-stage pipeline achieves similar recall to brute-force sliding-window while using substantially fewer classifier inferences (measured in inference count).
+- **Database integration**: Predictions are successfully stored in MySQL `jingle_detection` table for processed files.
 
 ---
 

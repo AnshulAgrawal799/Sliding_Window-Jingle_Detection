@@ -1,7 +1,29 @@
 # Train the audio model which will detect if jingle is present in the audio file
+# Updated to store predictions in MySQL database
 import argparse
 import os
+import sys
+import logging
+import time
 import warnings
+
+# Add the project root to Python path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Try to load .env using python-dotenv if it's installed. This is opportunistic:
+# failure to import dotenv is non-fatal and we simply fall back to existing os.environ.
+try:
+    from dotenv import find_dotenv, load_dotenv
+
+    _dotenv_path = find_dotenv()  # searches upwards for a .env file
+    if _dotenv_path:
+        # load into os.environ without overriding existing env vars
+        load_dotenv(_dotenv_path, override=False)
+except Exception:
+    # ignore any errors and continue using os.environ
+    pass
+
+from db_mysql import get_connection, get_audio_file_id_by_filename
 
 import joblib
 import librosa
@@ -20,6 +42,58 @@ def extract_features(file_path, sr=22050, n_mfcc=13):
     mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc)
     mfccs = np.mean(mfccs.T, axis=0)  # Average over time frames
     return mfccs
+
+
+def insert_jingle_prediction(audio_file_path, prediction_result, conn=None):
+    """
+    Insert a jingle detection prediction into the jingle_detection table.
+
+    Args:
+        audio_file_path (str): Path to the audio file
+        prediction_result (str): Either 'Present' or 'Absent'
+        conn: Optional database connection (will create one if not provided)
+
+    Returns:
+        bool: True if insertion was successful, False otherwise
+    """
+    own_conn = False
+    if conn is None:
+        try:
+            conn = get_connection()
+            own_conn = True
+        except Exception as e:
+            logging.error(f"Failed to connect to database: {e}")
+            return False
+
+    try:
+        # Get audio file ID from database
+        audio_file_id = get_audio_file_id_by_filename(audio_file_path, conn)
+        if audio_file_id is None:
+            logging.warning(f"Could not find audio_file_id for {audio_file_path}")
+            return False
+
+        # Convert prediction to enum value
+        jingle_value = 'Present' if prediction_result == 'Jingle Present' else 'Absent'
+
+        # Insert prediction into database
+        cursor = conn.cursor()
+        sql = "INSERT INTO jingle_detection (audio_file_id, jingle) VALUES (%s, %s)"
+        cursor.execute(sql, (audio_file_id, jingle_value))
+        conn.commit()
+        cursor.close()
+
+        logging.info(f"Successfully inserted prediction for {audio_file_path}: {jingle_value}")
+        return True
+
+    except Exception as e:
+        logging.error(f"Error inserting prediction for {audio_file_path}: {e}")
+        return False
+    finally:
+        if own_conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
 
 def load_data(jingle_dir, non_jingle_dir):
@@ -69,16 +143,33 @@ def train_model(jingle_dir='data/train_data/jingle', non_jingle_dir='data/train_
     print("Training complete.")
 
 
-def predict_jingle(file_path, model_path='jingle_detector_model.pkl'):
+def predict_jingle(file_path, model_path='jingle_detector_model.pkl', save_to_db=True):
     """Predict whether a given audio file contains a jingle."""
     clf = joblib.load(model_path)
     mfccs = extract_features(file_path)
     mfccs = mfccs.reshape(1, -1)  # Reshape for prediction
     prediction = clf.predict(mfccs)
-    return "Jingle Present" if prediction[0] == 1 else "Jingle Absent"
+    result = "Jingle Present" if prediction[0] == 1 else "Jingle Absent"
+
+    # Save prediction to database if requested
+    if save_to_db:
+        success = insert_jingle_prediction(file_path, result)
+        if not success:
+            logging.warning(f"Failed to save prediction to database for {file_path}")
+
+    return result
 
 
 def main():
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+        ]
+    )
+
     parser = argparse.ArgumentParser(description="Train and run a simple jingle detector using MFCC + RandomForest.")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -95,6 +186,7 @@ def main():
     pred_p = subparsers.add_parser("predict", help="Predict on a file or all files in a folder")
     pred_p.add_argument("--input", required=True, help="Path to an audio file or a directory of audio files")
     pred_p.add_argument("--model_path", default="jingle_detector_model.pkl", help="Path to a trained model file")
+    pred_p.add_argument("--no_db", action="store_true", help="Don't save predictions to database")
 
     args = parser.parse_args()
 
@@ -109,24 +201,39 @@ def main():
         )
     elif args.command == "predict":
         target = args.input
+        save_to_db = not args.no_db
+
         if os.path.isdir(target):
             files = [f for f in os.listdir(target) if os.path.isfile(os.path.join(target, f)) and f.lower().endswith(('.wav', '.opus'))]
             if not files:
-                print(f"No WAV or OPUS files found in {target}")
+                logging.error(f"No WAV or OPUS files found in {target}")
                 return
+
+            logging.info(f"Processing {len(files)} files in {target}")
+            success_count = 0
+            error_count = 0
+
             for fname in files:
                 fpath = os.path.join(target, fname)
                 try:
-                    result = predict_jingle(fpath, model_path=args.model_path)
+                    result = predict_jingle(fpath, model_path=args.model_path, save_to_db=save_to_db)
                     print(f"Prediction for {fpath}: {result}")
+                    success_count += 1
                 except Exception as e:
+                    logging.error(f"Error processing {fpath}: {e}")
                     print(f"Error processing {fpath}: {e}")
+                    error_count += 1
+
+            logging.info(f"Processing complete. Success: {success_count}, Errors: {error_count}")
         else:
             try:
-                result = predict_jingle(target, model_path=args.model_path)
+                result = predict_jingle(target, model_path=args.model_path, save_to_db=save_to_db)
                 print(f"Prediction for {target}: {result}")
+                logging.info(f"Successfully processed {target}: {result}")
             except Exception as e:
+                logging.error(f"Error processing {target}: {e}")
                 print(f"Error processing {target}: {e}")
+                sys.exit(1)
 
 
 if __name__ == "__main__":
