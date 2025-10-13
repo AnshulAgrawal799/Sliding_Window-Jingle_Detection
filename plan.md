@@ -232,16 +232,19 @@ DB_NAME=your_database_name
 
 - **Automatic storage**: Predictions are automatically saved to the database after processing each file
 - **File cleanup**: Successfully processed audio files are automatically deleted from the filesystem
+- **Data integrity**: Files are only deleted after confirming successful database storage
 - **Error handling**: Database failures are logged but don't stop processing
 - **Audio file lookup**: Uses filename matching to find corresponding `audio_file_id`
 - **Graceful degradation**: Can run predictions without database storage using `--no_db` flag
+
+**⚠️ Important**: Audio files are permanently deleted after successful processing. Ensure proper backups exist if original files need to be retained for any reason.
 
 ### Database Workflow
 
 1. Process audio file and generate prediction
 2. Look up `audio_file_id` in `audio_file` table using filename
 3. Insert prediction result into `jingle_detection` table
-4. Delete the audio file from filesystem after successful insertion
+4. **Delete the audio file from filesystem after successful insertion**
 5. Continue processing next file
 
 This provides persistent storage for analysis and reporting while maintaining the core detection functionality and automatic file cleanup.
@@ -313,6 +316,8 @@ python scripts/jingle_detector.py predict --input recordings/route1.wav --model_
 - Performance benchmarks on synthetic SNR sweep: recall >= target at SNR >= 0 dB (tune to your operational target). Record the SNR level corresponding to the target recall.
 - Two-stage pipeline achieves similar recall to brute-force sliding-window while using substantially fewer classifier inferences (measured in inference count).
 - **Database integration**: Predictions are successfully stored in MySQL `jingle_detection` table for processed files.
+- **File cleanup**: Successfully processed audio files are automatically deleted from the filesystem after database storage.
+- **Error resilience**: Failed operations preserve audio files for retry and provide clear error reporting.
 
 ---
 

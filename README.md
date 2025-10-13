@@ -133,6 +133,8 @@ When running predictions, the script will:
    - `row_created_at`: Automatic timestamp
 3. **Delete audio file** - Remove the processed audio file from the filesystem after successful database insertion
 
+**⚠️ Important**: Audio files are permanently deleted after successful processing. Ensure you have backups if you need to retain the original files.
+
 ### Database Error Handling
 
 - If database connection fails, the script logs a warning but continues processing
