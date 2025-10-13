@@ -46,7 +46,7 @@ def extract_features(file_path, sr=22050, n_mfcc=13):
 
 def insert_jingle_prediction(audio_file_path, prediction_result, conn=None):
     """
-    Insert a jingle detection prediction into the jingle_detection table.
+    Insert a jingle detection prediction into the jingle_detection table and delete the audio file.
 
     Args:
         audio_file_path (str): Path to the audio file
@@ -54,7 +54,7 @@ def insert_jingle_prediction(audio_file_path, prediction_result, conn=None):
         conn: Optional database connection (will create one if not provided)
 
     Returns:
-        bool: True if insertion was successful, False otherwise
+        bool: True if insertion was successful and file was deleted, False otherwise
     """
     own_conn = False
     if conn is None:
@@ -83,6 +83,15 @@ def insert_jingle_prediction(audio_file_path, prediction_result, conn=None):
         cursor.close()
 
         logging.info(f"Successfully inserted prediction for {audio_file_path}: {jingle_value}")
+
+        # Delete the audio file after successful database insertion
+        try:
+            os.remove(audio_file_path)
+            logging.info(f"Successfully deleted audio file: {audio_file_path}")
+        except Exception as e:
+            logging.error(f"Failed to delete audio file {audio_file_path}: {e}")
+            return False
+
         return True
 
     except Exception as e:
@@ -154,8 +163,10 @@ def predict_jingle(file_path, model_path='jingle_detector_model.pkl', save_to_db
     # Save prediction to database if requested
     if save_to_db:
         success = insert_jingle_prediction(file_path, result)
-        if not success:
-            logging.warning(f"Failed to save prediction to database for {file_path}")
+        if success:
+            logging.info(f"Successfully processed and archived {file_path}")
+        else:
+            logging.error(f"Failed to process {file_path} - prediction not saved and file not deleted")
 
     return result
 
@@ -224,12 +235,12 @@ def main():
                     print(f"Error processing {fpath}: {e}")
                     error_count += 1
 
-            logging.info(f"Processing complete. Success: {success_count}, Errors: {error_count}")
+            logging.info(f"Processing complete. Success: {success_count}, Errors: {error_count} (files deleted after successful processing)")
         else:
             try:
                 result = predict_jingle(target, model_path=args.model_path, save_to_db=save_to_db)
                 print(f"Prediction for {target}: {result}")
-                logging.info(f"Successfully processed {target}: {result}")
+                logging.info(f"Successfully processed and archived {target}")
             except Exception as e:
                 logging.error(f"Error processing {target}: {e}")
                 print(f"Error processing {target}: {e}")

@@ -131,11 +131,14 @@ When running predictions, the script will:
    - `audio_file_id`: The ID from the `audio_file` table
    - `jingle`: 'Present' or 'Absent' based on the prediction
    - `row_created_at`: Automatic timestamp
+3. **Delete audio file** - Remove the processed audio file from the filesystem after successful database insertion
 
 ### Database Error Handling
 
 - If database connection fails, the script logs a warning but continues processing
 - If an audio file ID cannot be found, the prediction is logged but not saved to database
+- If database insertion fails, the audio file is not deleted (to allow for retry)
+- If file deletion fails after successful database insertion, the operation is considered failed
 - All database operations are handled gracefully without stopping the prediction process
 
 ## Notes

@@ -231,6 +231,7 @@ DB_NAME=your_database_name
 ### Database Integration Features
 
 - **Automatic storage**: Predictions are automatically saved to the database after processing each file
+- **File cleanup**: Successfully processed audio files are automatically deleted from the filesystem
 - **Error handling**: Database failures are logged but don't stop processing
 - **Audio file lookup**: Uses filename matching to find corresponding `audio_file_id`
 - **Graceful degradation**: Can run predictions without database storage using `--no_db` flag
@@ -240,9 +241,10 @@ DB_NAME=your_database_name
 1. Process audio file and generate prediction
 2. Look up `audio_file_id` in `audio_file` table using filename
 3. Insert prediction result into `jingle_detection` table
-4. Continue processing next file
+4. Delete the audio file from filesystem after successful insertion
+5. Continue processing next file
 
-This provides persistent storage for analysis and reporting while maintaining the core detection functionality.
+This provides persistent storage for analysis and reporting while maintaining the core detection functionality and automatic file cleanup.
 
 ---
 

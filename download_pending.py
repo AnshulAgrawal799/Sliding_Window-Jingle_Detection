@@ -6,7 +6,7 @@ from urllib.parse import unquote, urlparse
 from db_mysql import get_connection
 
 
-def fetch_pending(limit=10):
+def fetch_pending(limit=5):
     """Fetch rows with process_status = 'Pending'."""
     conn = get_connection()
     try:
@@ -99,7 +99,7 @@ def download_file(url, record_id):
 
 
 def main():
-    rows = fetch_pending(limit=10)
+    rows = fetch_pending(limit=5)
     print(f"Found {len(rows)} Pending rows")
     for r in rows:
         rid = r["id"]
