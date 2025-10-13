@@ -6,7 +6,7 @@ from urllib.parse import unquote, urlparse
 from db_mysql import get_connection
 
 
-def fetch_pending(limit=5):
+def fetch_pending(limit=10):
     """Fetch rows with process_status = 'Pending'."""
     conn = get_connection()
     try:
@@ -43,8 +43,21 @@ def _unique_path(dirpath: str, filename: str) -> str:
     return os.path.join(dirpath, candidate)
 
 
+def update_process_status(record_id, status):
+    """Update process_status for a specific record."""
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE audio_file SET process_status = %s WHERE id = %s",
+            (status, record_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def download_file(url, record_id):
-    """Download URL into the same folder as this script; return final path."""
     url_decoded = unquote(url)
     parsed = urlparse(url_decoded)
     # get the basename (drop any query parameters)
@@ -86,7 +99,7 @@ def download_file(url, record_id):
 
 
 def main():
-    rows = fetch_pending(limit=5)
+    rows = fetch_pending(limit=10)
     print(f"Found {len(rows)} Pending rows")
     for r in rows:
         rid = r["id"]
@@ -96,6 +109,7 @@ def main():
             continue
         try:
             download_file(url, rid)
+            update_process_status(rid, "InProgress")
         except Exception as e:
             print(f"[{rid}] Failed to download: {e}")
 
