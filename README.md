@@ -4,15 +4,15 @@ This project provides a simple MFCC + RandomForest pipeline to train a model tha
 
 ## Project Structure
 
+- `audio/` — Audio data files after downloading
 - `scripts/jingle_detector.py` — Train and predict CLI with database integration
-- `scripts/generate_dummy_audio.py` — Quickly generate tiny WAV files to test the pipeline
 - `db_mysql.py` — Database connection utilities for MySQL integration
 - `data/` — Place data here
   - `data/train_data/jingle/` — WAVs that contain a jingle
   - `data/train_data/non_jingle/` — WAVs that do not contain a jingle
   - `data/test_data/` — WAVs to run predictions on
 - `requirements.txt` — Python dependencies
-- `.env` — Environment variables for database configuration (create this file)
+- `.env` — Environment variables for database configuration
 
 ## Prerequisites
 
