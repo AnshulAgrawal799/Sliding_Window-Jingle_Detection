@@ -59,8 +59,8 @@ def download_file(url, record_id):
     if not str(filename).startswith(f"{record_id}_"):
         filename = f"{record_id}_" + filename
 
-    # Use Lambda's /tmp directory for temporary storage
-    script_folder = "/tmp/audio"
+    # Use Lambda's /tmp directory for temporary storage or local repo root for testing
+    script_folder = "/tmp/audio" if os.name == 'posix' or 'LAMBDA_TASK_ROOT' in os.environ else os.path.join(os.getcwd(), "audio")
     os.makedirs(script_folder, exist_ok=True)
 
     dest_path = _unique_path(script_folder, filename)
