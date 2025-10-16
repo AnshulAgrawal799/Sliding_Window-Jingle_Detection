@@ -29,7 +29,15 @@ cd lambda_packages\lambda_jingle_detector
 powershell -command "Compress-Archive -Path . -DestinationPath ../lambda_jingle_detector.zip"
 cd ..\..
 
+REM Package for db_mysql
+mkdir lambda_packages\lambda_db_mysql
+copy lambda_db_mysql.py lambda_packages\lambda_db_mysql\
+copy db_mysql.py lambda_packages\lambda_db_mysql\  REM Assuming db_mysql.py exists
+cd lambda_packages\lambda_db_mysql
+powershell -command "Compress-Archive -Path . -DestinationPath ../lambda_db_mysql.zip"
+cd ..\..
+
 REM Deactivate environment
 call lambda_env\Scripts\deactivate.bat
 
-echo Lambda packages created: lambda_packages/lambda_download_pending.zip and lambda_packages/lambda_jingle_detector.zip
+echo Lambda packages created: lambda_packages/lambda_download_pending.zip, lambda_packages/lambda_jingle_detector.zip, and lambda_packages/lambda_db_mysql.zip
