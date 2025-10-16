@@ -11,12 +11,4 @@ __pycache__
 
 *.pyd
 
-*.pyc
-
-*.pyo
-
-*.pyd
-
-*.pyc
-
 audio/
