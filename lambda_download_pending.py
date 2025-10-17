@@ -5,7 +5,7 @@ import requests
 from urllib.parse import unquote, urlparse
 from db_mysql import get_connection
 
-def fetch_pending(limit=5, conn=None):
+def fetch_pending(limit=3, conn=None):
     """Fetch rows with process_status = 'Pending'."""
     if conn is None:
         conn = get_connection()
@@ -91,8 +91,8 @@ def download_file(url, record_id):
         raise
 
 def lambda_handler(event, context):
-    # Extract limit from event, default to 5
-    limit = event.get('limit', 5) if event else 5
+    # Extract limit from event, default to 3
+    limit = event.get('limit', 3) if event else 3
 
     rows = fetch_pending(limit=limit)
     print(f"Found {len(rows)} Pending rows")

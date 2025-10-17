@@ -2,18 +2,13 @@ import os
 import re
 from typing import Optional
 
-# Try to load .env using python-dotenv if it's installed. This is opportunistic:
-# failure to import dotenv is non-fatal and we simply fall back to existing os.environ.
-try:
-    from dotenv import find_dotenv, load_dotenv
+# Load .env using python-dotenv
+from dotenv import find_dotenv, load_dotenv
 
-    _dotenv_path = find_dotenv()  # searches upwards for a .env file
-    if _dotenv_path:
-        # load into os.environ without overriding existing env vars
-        load_dotenv(_dotenv_path, override=False)
-except Exception:
-    # ignore any errors and continue using os.environ
-    pass
+_dotenv_path = find_dotenv()  # searches upwards for a .env file
+if _dotenv_path:
+    # load into os.environ without overriding existing env vars
+    load_dotenv(_dotenv_path, override=False)
 
 MIN_VERSION = "8.0.23"
 PKG_NAME = "mysql-connector-python"
