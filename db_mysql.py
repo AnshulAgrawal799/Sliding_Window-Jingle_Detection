@@ -136,104 +136,8 @@ import json
 from typing import Mapping, Any, Optional as _Optional
 
 
-def insert_segment(segment: Mapping[str, Any], conn: _Optional["mysql.connector.MySQLConnection"] = None) -> None:
-    """
-    Insert a single segment into the `segment` table.
-
-    Expects `segment` in the shape produced by Segment.to_dict() from src/analyze.py.
-    Field mapping performed here to match DB columns.
-
-    If `conn` is not provided, this function will open a new connection and close it after commit.
-    """
-    # Lazy import for type and to avoid mandatory dependency at module import time
-    _ensure_connector_present_and_ok()
-    import mysql.connector  # type: ignore
-
-    own_conn = False
-    if conn is None:
-        conn = get_connection()
-        own_conn = True
-
-    try:
-        cur = conn.cursor()
-
-        # Map fields from pipeline dict to DB columns
-        seg_id = segment.get('segment_id')
-        audio_file_id = segment.get('audio_file_id')
-        speaker_role = segment.get('speaker_role')
-        role_confidence = segment.get('role_confidence')
-        start_ms = segment.get('start_ms')
-        end_ms = segment.get('end_ms')
-        duration_ms = segment.get('duration_ms')
-        asr_confidence = segment.get('asr_confidence')
-        lang = segment.get('language') or segment.get('lang')
-        text_original = segment.get('text_original') or segment.get('textTamil') or ''
-        translations = segment.get('translations')
-        products = segment.get('products')
-        intent = segment.get('intent')
-        sentiment = segment.get('sentiment')
-        emotion = segment.get('emotion')
-        emotions = segment.get('emotions')
-        needs_review = segment.get('needs_human_review') or segment.get('needs_review') or False
-        review_reasons = segment.get('review_reasons')
-        model_versions = segment.get('model_versions')
-        is_translated = segment.get('is_translated') or False
-
-        # Ensure proper primitive types
-        def _json_or_none(x):
-            if x is None:
-                return None
-            try:
-                return json.dumps(x, ensure_ascii=False)
-            except Exception:
-                return None
-
-        sql = (
-            "INSERT INTO segment (segment_id, audio_file_id, speaker_role, role_confidence, start_ms, end_ms, "
-            "duration_ms, asr_confidence, lang, text_original, translations, products, intent, sentiment, "
-            "emotion, emotions, needs_review, review_reasons, model_versions, is_translated) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
-        )
-
-        params = (
-            str(seg_id) if seg_id is not None else None,
-            int(audio_file_id) if audio_file_id is not None else None,
-            speaker_role,
-            float(role_confidence) if role_confidence is not None else None,
-            int(start_ms) if start_ms is not None else 0,
-            int(end_ms) if end_ms is not None else 0,
-            int(duration_ms) if duration_ms is not None else None,
-            float(asr_confidence) if asr_confidence is not None else None,
-            (str(lang) if lang is not None else None),
-            text_original if text_original is not None else '',
-            _json_or_none(translations),
-            _json_or_none(products),
-            _json_or_none(intent),
-            _json_or_none(sentiment),
-            (str(emotion) if emotion is not None else None),
-            _json_or_none(emotions),
-            1 if bool(needs_review) else 0,
-            _json_or_none(review_reasons),
-            _json_or_none(model_versions),
-            1 if bool(is_translated) else 0,
-        )
-
-        cur.execute(sql, params)
-        conn.commit()
-    finally:
-        try:
-            cur.close()
-        except Exception:
-            pass
-        if own_conn:
-            try:
-                conn.close()
-            except Exception:
-                pass
-
-
 # convenience export
-__all__ = ["get_connection", "insert_segment"]
+__all__ = ["get_connection"]
 
 from pathlib import Path as _Path
 
@@ -320,4 +224,4 @@ def get_audio_file_id_by_filename(filename: str, conn: _Optional["mysql.connecto
             except Exception:
                 pass
 
-__all__ = ["get_connection", "insert_segment", "get_audio_file_id_by_filename"]
+__all__ = ["get_connection", "get_audio_file_id_by_filename"]
