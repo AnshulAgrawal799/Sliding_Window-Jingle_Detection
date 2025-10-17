@@ -15,7 +15,7 @@ class MockContext:
 # Define a sample event for testing
 # Example: Set limit for fetching pending files
 event = {
-    'limit': 5  # Number of pending files to process (default: 5)
+    'limit': 3  # Number of pending files to process (default: 3)
 }
 
 # Run the handler
